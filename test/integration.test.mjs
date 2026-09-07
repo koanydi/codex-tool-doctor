@@ -1,0 +1,35 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, writeFile, readFile, rm, appendFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { loadConfig } from '../src/config.mjs';
+import { discoverBinaries } from '../src/binaries.mjs';
+import { createPlan, applyPlan, status, rollback } from '../src/patch.mjs';
+import { runProcess } from '../src/process.mjs';
+import { fileURLToPath } from 'node:url';
+
+test('real backend plan/apply/rollback preserves later user settings', { skip: !process.env.TOOL_DOCTOR_INTEGRATION_BINARY }, async t => {
+  const home = await mkdtemp(join(tmpdir(), 'tool-doctor-integration-'));
+  t.after(() => rm(home, {recursive:true,force:true}));
+  const raw = 'model = "gpt-6-astra"\nmodel_provider = "custom"\n[model_providers.custom]\nname = "custom"\nwire_api = "responses"\nbase_url = "https://example.test"\nrequires_openai_auth = false\n';
+  await writeFile(join(home, 'config.toml'), raw);
+  const config = await loadConfig(home);
+  const binaries = await discoverBinaries(process.env.TOOL_DOCTOR_INTEGRATION_BINARY);
+  const candidatePath = join(home, 'candidate with spaces.json');
+  const candidateScript = fileURLToPath(new URL('../scripts/prepare-catalog.mjs', import.meta.url));
+  const candidate = await runProcess(process.execPath, [candidateScript, '--home', home, '--binary', binaries[0].path, '--output', candidatePath]);
+  assert.equal(candidate.code, 0, candidate.stderr);
+  assert.equal(JSON.parse(await readFile(candidatePath,'utf8')).models.find(m=>m.slug==='gpt-6-astra').use_responses_lite,false);
+  assert.equal(await readFile(join(home,'config.toml'),'utf8'),raw);
+  const report = { createdAt: new Date().toISOString(), model:config.config.model, endpoint:config.endpoint, configHash:config.configHash, summary:{patchRecommended:true} };
+  const plan = await createPlan(config, report, binaries);
+  assert.equal(await readFile(join(home,'config.toml'),'utf8'), raw);
+  await applyPlan(home, plan);
+  assert.equal((await status(home)).catalogIntact, true);
+  await appendFile(join(home,'config.toml'), '\n# Later user edit\n');
+  const result = await rollback(home);
+  assert.equal(result.preservedOtherEdits, true);
+  assert.equal(await readFile(join(home,'config.toml'),'utf8'), raw + '\n# Later user edit\n');
+  assert.equal((await status(home)).patched, false);
+});

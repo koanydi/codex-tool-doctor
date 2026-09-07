@@ -1,0 +1,10 @@
+{
+  "name": "codex-tool-doctor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Diagnose and repair Codex tool compatibility without a local proxy.",
+  "engines": { "node": ">=22" },
+  "scripts": { "test": "node --test", "doctor": "node src/cli.mjs" },
+  "dependencies": { "smol-toml": "1.6.0" }
+}
