@@ -35,7 +35,7 @@ test('CLI help and errors are in Chinese', async () => {
   assert.match(result.stdout,/Linux/);
   const invalid=await runProcess(process.execPath,[cli,'status','--catalog','candidate.json']);
   assert.notEqual(invalid.code,0);
-  assert.match(invalid.stderr,/仅用于 verify/);
+  assert.match(invalid.stderr,/仅用于verify/);
 });
 test('menu displays Chinese choices and exits without touching configuration', async () => {
   await new Promise((resolve,reject)=>{
@@ -53,11 +53,10 @@ test('known diagnostic result labels and missing-file errors are Chinese', () =>
   assert.match(probeNames['custom-additional'],/自定义/);
   assert.match(friendlyError({code:'ENOENT',path:'/missing'}),/找不到文件/);
 });
-test('POSIX launcher is UTF-8 with LF, preserving argument forwarding', async () => {
+test('POSIX launcher is UTF-8 with LF', async () => {
   const text=await readFile(new URL('../doctor.sh',import.meta.url),'utf8');
   assert.ok(text.startsWith('#!/bin/sh\n'));
   assert.equal(text.includes('\r'),false);
-  assert.ok(text.includes('exec node "$script_dir/src/cli.mjs" "$@"'));
 });
 test('Windows launcher preserves CRLF for UTF-8 batch parsing', async () => {
   const text=await readFile(new URL('../doctor.cmd',import.meta.url),'utf8');

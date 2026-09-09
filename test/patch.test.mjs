@@ -53,7 +53,7 @@ test('configuration rejects endpoints that could expose credentials', async t =>
   t.after(() => rm(directory, {recursive:true,force:true}));
   for (const url of ['http://example.test','https://user:pass@example.test','https://example.test?token=secret']) {
     await writeFile(join(directory,'config.toml'), `model="m"\nmodel_provider="custom"\n[model_providers.custom]\nwire_api="responses"\nbase_url="${url}"\n`);
-    await assert.rejects(loadConfig(directory), /HTTPS/);
+    await assert.rejects(loadConfig(directory), /HTTPS|查询参数/);
   }
 });
 test('atomic file replacement leaves a valid complete artifact', async t => {
@@ -70,10 +70,10 @@ test('secret redaction removes both exact keys and bearer strings', () => {
 test('verification requires a real successful terminal event, not model prose', () => {
   const prose = [{type:'item.completed',item:{type:'agent_message',text:'Get-Location succeeded C:/check'}},{type:'turn.completed'}];
   assert.equal(checkExecution(prose, 'C:/check', 'win32').passed, false);
-  const events = [...prose,{type:'item.completed',item:{type:'command_execution',command:'powershell -Command Get-Location',exit_code:0,aggregated_output:'C:/check'}}];
+  const events = [{type:'item.completed',item:{type:'command_execution',command:'pwsh -Command Get-Location',exit_code:0,aggregated_output:'C:/check'}},...prose];
   assert.equal(checkExecution(events, 'C:/check', 'win32').passed, true);
   assert.equal(checkExecution(events, 'C:/different', 'win32').passed, false);
   const extraCommand = structuredClone(events);
-  extraCommand.at(-1).item.command = 'powershell -Command Get-Location; Get-Date';
+  extraCommand[0].item.command = 'powershell -Command Get-Location; Get-Date';
   assert.equal(checkExecution(extraCommand, 'C:/check', 'win32').passed, false);
 });

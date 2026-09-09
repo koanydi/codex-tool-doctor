@@ -1,129 +1,80 @@
-# Codex 工具诊断与修复
+# Codex Tool Doctor
 
-中文命令行工具，用于检测第三方 Responses API 的工具兼容性，并对已验证的 Codex 构建应用可回滚的协议配置补丁。无需 HTTP 代理、监听端口或常驻服务。
+**修复第三方API不兼容导致Codex无法调用工具的问题。**
 
-**详细修改思路、Linux 临时验证、手动应用和回滚步骤：** [修改原理与 Linux 指南](docs/修改原理与Linux指南.md)。
+接入第三方API或本地中转后，Codex能聊天，却不执行终端命令、提示没有工具，或在工具请求阶段报错？Codex Tool Doctor用于诊断这类工具协议兼容问题，并对适用的客户端生成、验证和安装修复配置。
 
-## 启动
+Diagnose and fix Codex tool-calling failures caused by incompatible third-party APIs.
 
-需要 Node.js 22 或更新版本。在工具目录首次安装依赖：
+[下载可运行版本](https://github.com/Onward0131/codex-tool-doctor/releases/latest) · [使用指南](docs/使用指南.md) · [问题反馈](https://github.com/Onward0131/codex-tool-doctor/issues) · [更新记录](CHANGELOG.md)
 
-```sh
-npm ci --ignore-scripts
-```
+![Codex Tool Doctor图形界面](docs/images/interface.png)
 
-Windows 可双击 `doctor.cmd` 打开中文菜单，也可在 PowerShell 中运行：
+界面示例，图中检测结果为演示数据。
 
-```powershell
-.\doctor.cmd
-```
+## 适合解决什么问题
 
-Linux 不需要 CMD 或 PowerShell，在终端进入工具目录后运行：
-
-```sh
-sh ./doctor.sh
-```
-
-也可直接使用 Node.js，所有平台共用相同程序：
-
-```sh
-node src/cli.mjs menu
-```
-
-## 功能选择
-
-| 编号 | 功能 | 行为 |
-| --- | --- | --- |
-| 1 | 查看本机配置与程序版本 | 离线查看配置目录、模型、API 地址、程序版本和哈希 |
-| 2 | 检测 API 工具兼容性 | 默认发送 8 次虚拟工具请求，可能消耗 API 额度 |
-| 3 | 生成补丁计划 | 根据最近的检测结果生成模型目录和计划，不修改生效配置 |
-| 4 | 应用补丁并验证 | 备份配置、应用补丁、验证实际终端；验证失败自动回滚 |
-| 5 | 验证终端执行能力 | 临时只读会话；Windows 执行 `Get-Location`，Linux 执行 `pwd` |
-| 6 | 查看当前补丁状态 | 查看本工具管理的补丁、模型目录路径和完整性 |
-| 7 | 回滚补丁 | 撤销本工具管理的补丁，保留之后的其他配置修改 |
-| 8 | 一键检测并修复 | 串行执行检测、计划、应用和验证，仅对已验证构建生效 |
-| 0 | 退出 | 退出菜单 |
-
-检测不会执行模型返回的虚拟工具调用；终端验证则会真实调用终端，也会消耗 API 额度。
-
-## 命令行
-
-Windows 的推荐操作顺序：
-
-```powershell
-.\doctor.cmd inspect
-.\doctor.cmd diagnose
-.\doctor.cmd plan
-.\doctor.cmd apply
-```
-
-Linux 的检测入口：
-
-```sh
-sh ./doctor.sh inspect
-sh ./doctor.sh diagnose
-```
-
-**当前自动补丁名单只有两份已经实测的 Windows 0.153.4 构建。** Linux 的入口、路径发现和 `pwd` 验证已适配，但 Linux 二进制尚未在真实 Linux 环境验证，因此不能直接宣称支持自动 `plan/apply/repair`。Linux 用户请按[专项指南](docs/修改原理与Linux指南.md)先验证候选配置；不要把 Linux 二进制哈希直接加入名单。
-
-常用选项：
-
-```sh
-node src/cli.mjs diagnose --repeats 3 --timeout 45 --json
-node src/cli.mjs inspect --home /home/alice/.codex --binary /opt/codex/codex
-node src/cli.mjs verify --catalog /home/alice/candidate-models.json --binary /opt/codex/codex
-```
-
-`--home` 默认使用 `CODEX_HOME`，未设置时使用用户目录下的 `.codex`。`--binary` 指定优先检查的程序。`--catalog` 仅供 `verify` 临时测试，不会修改全局配置。`--json` 保留英文字段名，方便脚本读取；普通交互和提示使用中文。
-
-退出码：`0` 为操作成功；`1` 为操作错误；`2` 为检测发现不兼容或终端验证未通过。发现问题的检测报告仍会正常保存。
-
-## 修改范围
-
-补丁导出客户端自带的模型目录，仅将当前模型的 `use_responses_lite` 从 `true` 改为 `false`，再通过配置顶层的 `model_catalog_json` 选用它。客户端使用自身已有的完整 Responses 请求构造逻辑，让 `exec` 不再放入问题命名空间结构。
-
-原有模型名、API 地址、认证和权限设置保持原值。程序不替换 Codex 可执行文件、不清除调用 ID、不重写历史会话。外置目录包含完整模型元数据，所以启用期间会固定这份目录；Codex 更新或切换模型后需要重新评估。
-
-已验证构建：
-
-| 程序 | SHA-256 |
+| 现象 | 工具的处理方式 |
 | --- | --- |
-| Windows 桌面端后端 0.153.4 | e5aa76d19c7c94e2e9ef9b707d590206a73ac0e97c8ddc8382181242494bef75 |
-| Windows npm CLI 0.153.4 | 444a3f0008050605cae73cd9b7a2dcac61294062dfaab56dd20430fd6498518b |
+| 普通聊天正常，终端等工具无法调用 | 比较四种工具格式，判断是否存在协议兼容差异 |
+| API拒绝命名空间或additional_tools，或只在这些请求中返回无效响应 | 生成兼容配置，实际验证终端执行与结果回传 |
+| 使用`http://127.0.0.1:端口`或HTTPS中转 | 保留端口、路由前缀和认证设置进行诊断 |
+| Codex升级后原修复失效 | 检查当前构建，重新生成并验证配置 |
+| 连接失败、密钥错误、限流或本机权限阻止 | 报告具体原因，指明应先处理的问题 |
 
-应用后请重启桌面端或 CLI 并新建会话。程序不主动关闭会话。后端命令验证不等同于桌面窗口的完整 UI 验证，也不保证旧会话、所有插件或图像工具均兼容。
+修复针对第三方Responses API与Codex之间的特定兼容问题。API需支持Responses及平铺工具调用，客户端需支持模型目录覆盖。它不将仅支持Chat Completions的接口转换为Responses，也不能给本身不支持工具调用的模型增加工具能力。
 
-## 备份、报告与回滚
+## 下载与启动
 
-文件保存在 `<Codex 配置目录>/tool-doctor/`：
+1. 从[Releases](https://github.com/Onward0131/codex-tool-doctor/releases/latest)下载`codex-tool-doctor-v版本号.zip`并完整解压到固定目录。
+2. 使用对应平台的入口：
 
-- `last-report.json`：最近一次检测结果、HTTP 状态和请求 ID。
-- `last-plan.json`、`plans/<id>/`：补丁计划、模型目录和当时的检测报告。
-- `active.json`：本工具管理的补丁、程序哈希和备份路径。
-- `backups/<id>/config.toml`：应用前的原始配置，回滚后仍保留。
-- `last-verification.json`：真实终端执行的验证结果。
+| 系统 | 图形界面 | 命令行菜单 |
+| --- | --- | --- |
+| Windows | 双击`doctor-gui.cmd` | `.\doctor.cmd menu` |
+| macOS | 双击`doctor.command` | `sh doctor.sh menu` |
+| Linux | `sh doctor-gui.sh` | `sh doctor.sh menu` |
 
-Windows 回滚：`doctor.cmd rollback`。Linux 对工具管理的补丁使用 `sh doctor.sh rollback`；手动写入的 Linux 配置按专项指南手动移除，不能当作本工具创建的补丁回滚。
+缺少Node.js或npm时，启动器自动下载并校验便携环境；缺少或损坏的依赖会自动修复，准备好后继续启动。已有环境会复用。首次准备环境需要联网和目录写入权限，不需要管理员权限或sudo。
 
-未发生其他修改时，回滚逐字恢复原配置；发生其他修改时，仅移除未被编辑过的管理区块。备份或管理区块被修改时停止自动回滚，避免覆盖用户修改。
+界面由本机程序运行，在浏览器打开，仅监听`127.0.0.1`。无需注册新账户，也不需要部署服务器。macOS解压后若无法双击，可运行`sh doctor-gui.sh`；Linux桌面没有浏览器时可使用命令行。
 
-## 凭据与边界
+## 使用流程
 
-凭据读取顺序为服务方指定的 `env_key`、`auth.json` 中的 `OPENAI_API_KEY`、环境变量 `OPENAI_API_KEY`。工具不使用 ChatGPT 会话令牌，不跟随 HTTPS 重定向；额外认证请求头暂不支持。报告不保存密钥或历史对话，但配置备份可能包含原配置中已有的敏感字段，应与原配置同样保管。
+1. **读取配置**：选择Codex配置目录和目标Codex程序。模型、API地址和认证从已有配置读取。
+2. **开始诊断**：比较平铺工具与命名空间工具，展示每组结果和阻止原因。
+3. **验证并修复**：点击“一键检测并修复”，或先查看计划，再点击“验证并安装”。两轮真实终端验证通过后才备份和写入配置。
+4. **重启Codex**：新建会话，再尝试让Codex执行命令。需要跟踪后续升级时，启用“登录后维护”。
 
-只有平铺函数与平铺自定义工具均连续通过至少两轮，且命名空间格式出现“未识别工具”、不存在 HTTP、网络或响应流错误时，才推荐此补丁。间歇性问题可能在不同轮次表现不同，少量检测不能保证未来的服务可用性。
+诊断和验证使用当前API，会消耗该服务的额度。修复只修改所选配置的模型目录引用，不修改Codex二进制，不转发日常请求。失败会保留原配置；需要恢复时可回滚。
 
-## 测试
+## 本地HTTP与HTTPS
 
-```sh
-npm test
+以下地址形式都支持，`/responses`只拼接一次：
+
+```text
+http://127.0.0.1:3000
+http://localhost:3000/v1
+http://127.0.0.1:3000/router/api/v1
+https://127.0.0.1:3443/v1
+https://api.example.com/v1
 ```
 
-默认测试不请求模型、不启动网络监听。可选的真实后端集成测试使用隔离配置目录，不修改当前用户配置：
+HTTPS正常校验证书，自建CA可通过`NODE_EXTRA_CA_CERTS`指定。公网HTTP需显式开启“允许公网HTTP明文请求”。配置示例、无密钥路由及请求头设置见[使用指南](docs/使用指南.md)。
 
-```powershell
-$env:TOOL_DOCTOR_INTEGRATION_BINARY = 'C:\path\to\codex.exe'
-npm.cmd test
-```
+## 持久修复与适用边界
 
-Linux 路径发现与命令识别有模拟测试；当前开发机器没有 Linux/WSL 环境，不能将这些测试等同于真实 Linux 后端的完整验证。
+修复配置没有到期时间。升级维护可在Codex、模型或配置变化后重建目录；无变化时不发送API请求。未来客户端或服务端协议改变仍可能需要新的适配，不能保证一次修复适用于所有未来版本。
+
+Windows、macOS和Linux共用修复逻辑，自动化检查覆盖三系统。实际能否修复以所选客户端的能力检测和两轮终端验证为准。终端成功不等于所有插件、图像工具和历史会话都已验证。
+
+## 文档与反馈
+
+- [使用指南](docs/使用指南.md)：配置、命令、升级维护、恢复和常见故障。
+- [设计说明](docs/设计说明.md)：协议差异、修复条件、事务和跨平台适配。
+- [验证指南](docs/验证指南.md)：可复现故障、自动化测试与真实客户端验收。
+- [参与开发](CONTRIBUTING.md)：本地开发与提交变更。
+
+反馈时请提供系统、工具版本、Codex版本及诊断结果。请勿上传API密钥、auth.json、完整配置或带认证信息的URL。
+
+本项目是独立社区工具，与OpenAI无隶属关系。

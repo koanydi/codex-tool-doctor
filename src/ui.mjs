@@ -7,7 +7,7 @@ export const probeNames = {
 };
 export const resultNames = {
   pass: '通过', 'no-tool': '模型未识别工具', 'unexpected-output': '返回结果不符合预期',
-  'http-error': 'HTTP 请求失败', 'network-error': '请求或解析失败', 'stream-error': '响应流异常',
+  'http-error': 'HTTP请求失败', 'network-error': '连接或请求失败', 'parse-error': '响应解析失败', 'stream-error': '响应流异常',
 };
 export const yesNo = value => value == null ? '不适用' : value ? '是' : '否';
 

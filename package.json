@@ -1,10 +1,27 @@
 {
   "name": "codex-tool-doctor",
-  "version": "1.0.0",
+  "version": "2.2.0",
   "private": true,
   "type": "module",
-  "description": "Diagnose and repair Codex tool compatibility without a local proxy.",
-  "engines": { "node": ">=22" },
-  "scripts": { "test": "node --test", "doctor": "node src/cli.mjs" },
-  "dependencies": { "smol-toml": "1.6.0" }
+  "description": "Diagnose and fix Codex tool-calling failures caused by incompatible third-party APIs.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Onward0131/codex-tool-doctor.git"
+  },
+  "bugs": "https://github.com/Onward0131/codex-tool-doctor/issues",
+  "keywords": ["codex", "third-party-api", "tool-calling", "responses-api", "compatibility"],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test",
+    "test:bootstrap": "node scripts/check-bootstrap.mjs",
+    "package": "node scripts/package-release.mjs",
+    "doctor": "node src/cli.mjs",
+    "gui": "node src/cli.mjs gui",
+    "mock-router": "node scripts/mock-router.mjs"
+  },
+  "dependencies": {
+    "smol-toml": "1.8.0"
+  }
 }

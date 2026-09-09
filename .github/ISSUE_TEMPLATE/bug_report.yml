@@ -1,0 +1,33 @@
+name: 故障反馈
+description: 报告第三方API工具调用、启动器或修复流程问题
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: 请勿粘贴API密钥、auth.json或完整配置；只提供已脱敏的必要信息。
+  - type: input
+    id: versions
+    attributes:
+      label: 系统与版本
+      description: 操作系统、Codex Tool Doctor版本、Codex版本
+      placeholder: Windows 11 / Tool Doctor 2.2.0 / Codex版本
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 现象与复现步骤
+      description: 进行了什么操作、预期结果是什么、实际发生了什么？
+    validations:
+      required: true
+  - type: input
+    id: endpoint
+    attributes:
+      label: API地址形式
+      description: 保留协议、主机类型、端口及路径，删除密钥和敏感域名。
+      placeholder: http://127.0.0.1:3000/router/v1
+  - type: textarea
+    id: report
+    attributes:
+      label: 诊断结果或错误信息
+      description: 提供脱敏后的检测结果、blockers或错误代码；请检查结果中的本机路径。

@@ -1,5 +1,4 @@
 #!/bin/sh
 set -eu
-
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-exec sh "$script_dir/scripts/bootstrap-posix.sh" "$@"
+exec sh "$script_dir/doctor.sh" gui "$@"

@@ -4,6 +4,8 @@ export function runProcess(binary, args, { timeout = 30000, cwd, env, onEvent } 
   return new Promise((resolve, reject) => {
     const child = spawn(binary, args, { cwd, env, windowsHide: true, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '', stderr = '', pending = '', timedOut = false, overflow = false;
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
     const stop = () => {
       if (process.platform === 'win32' && child.pid) {
         const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
@@ -27,6 +29,7 @@ export function runProcess(binary, args, { timeout = 30000, cwd, env, onEvent } 
     child.on('error', error => { clearTimeout(timer); reject(error); });
     child.on('close', code => {
       clearTimeout(timer);
+      if (onEvent && pending.trim()) { try { onEvent(JSON.parse(pending)); } catch {} }
       resolve({ code, stdout, stderr, timedOut, overflow });
     });
   });
@@ -35,7 +38,7 @@ export function runProcess(binary, args, { timeout = 30000, cwd, env, onEvent } 
 export async function runJson(binary, args, options) {
   const result = await runProcess(binary, args, options);
   if (result.code !== 0 || result.timedOut || result.overflow) {
-    throw new Error(result.timedOut ? 'Codex 命令执行超时。' : 'Codex 无法加载指定配置。');
+    throw new Error(result.timedOut ? 'Codex命令执行超时。' : 'Codex无法加载指定配置或不支持该诊断命令。');
   }
-  try { return JSON.parse(result.stdout); } catch { throw new Error('Codex 返回的诊断 JSON 无效。'); }
+  try { return JSON.parse(result.stdout); } catch { throw new Error('Codex返回的诊断JSON无效。'); }
 }

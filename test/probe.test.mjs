@@ -53,5 +53,7 @@ test('patch recommendation requires repeated working flat controls', () => {
   samples.push({kind:'custom-namespace',round:1,result:'no-tool'});
   assert.equal(summarize(samples).patchRecommended, true);
   assert.equal(summarize(samples.slice(1)).patchRecommended, false);
-  assert.equal(summarize([...samples,{kind:'custom-additional',round:1,result:'network-error'}]).patchRecommended, false);
+  const differential = summarize([...samples,{kind:'custom-additional',round:1,result:'network-error'}]);
+  assert.equal(differential.patchRecommended, true);
+  assert.ok(differential.warnings.length);
 });

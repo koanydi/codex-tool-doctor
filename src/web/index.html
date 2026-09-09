@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="诊断并修复第三方API不兼容导致Codex无法调用工具的问题。"><title>Codex Tool Doctor · 第三方API工具调用修复</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-icon">✳</span><div>Tool Doctor<small>CODEX COMPATIBILITY</small></div></div>
+    <div class="nav-label">工作空间</div><a class="nav active" href="#overview"><span>◈</span>诊断工作台</a><a class="nav" href="#connection"><span>⌁</span>配置与连接</a><a class="nav" href="#maintenance"><span>↻</span>长期维护</a><a class="nav" href="#notes"><span>≡</span>修复原理</a>
+    <div class="sidebar-bottom"><span class="dot"></span>本机运行<small>Windows · macOS · Linux<br>v2.2.0 / 无代理转发</small></div>
+  </aside>
+  <main id="overview">
+    <header><div class="breadcrumb">工作空间 <span>/</span> 诊断工作台</div><span class="local-badge">● LOCAL ONLY</span></header>
+    <section class="page-heading"><div class="eyebrow">THIRD-PARTY API COMPATIBILITY</div><h1>修复第三方API的工具调用问题</h1><p>接入第三方API后，Codex能聊天却无法使用工具？先诊断协议差异，再验证并安装修复。</p></section>
+    <div id="notice" role="status" aria-live="polite" class="notice">正在读取本机配置…</div>
+    <section class="metrics" aria-label="当前状态">
+      <article><div class="metric-label">连接地址<span>↗</span></div><strong id="endpoint">等待读取</strong><small id="provider">支持127.0.0.1本地路由</small></article>
+      <article><div class="metric-label">当前模型<span>◇</span></div><strong id="model">—</strong><small id="protocol">Responses协议</small></article>
+      <article><div class="metric-label">补丁状态<span>⊙</span></div><strong id="patch-state">未检测</strong><small id="verified-at">候选验证通过后才安装</small></article>
+    </section>
+    <div class="workspace">
+      <div class="main-column">
+        <section class="panel diagnostic-panel"><div class="panel-heading"><div><span class="section-number">01</span><h2>协议兼容性诊断</h2></div><button class="text-button" id="download-report" disabled>↓ 导出报告</button></div><p class="panel-description">用平铺工具作为对照，逐项定位命名空间请求的问题。</p>
+          <div class="table-wrap"><table><thead><tr><th>检测格式</th><th>通过轮数</th><th>诊断结果</th></tr></thead><tbody id="probe-rows"></tbody></table></div>
+          <div id="decision" class="decision">尚未检测。点击下方按钮开始，会发送8次虚拟工具请求并消耗API额度。</div>
+          <div class="panel-actions"><button class="primary" data-command="diagnose">开始诊断 <span>→</span></button><button class="secondary" data-command="repair">一键检测并修复</button></div>
+        </section>
+        <section class="panel"><div class="panel-heading"><div><span class="section-number">02</span><h2>修复计划与验证</h2></div><span class="tag">可回滚</span></div>
+          <div class="steps"><div><span>1</span><strong>生成候选</strong><small>读取目标构建的模型目录</small></div><div><span>2</span><strong>验证终端</strong><small>两轮调用及结果回传</small></div><div><span>3</span><strong>备份安装</strong><small>通过后才写入配置</small></div></div>
+          <div class="plan-box" id="plan">暂无候选计划。诊断明确后，可以生成一份可审阅的补丁。</div>
+          <div class="panel-actions"><button class="secondary" data-command="plan">生成计划</button><button class="primary" data-command="apply" id="apply-button">验证并安装</button><button class="text-button" data-command="verify">验证当前状态</button></div>
+        </section>
+        <section class="panel" id="maintenance"><div class="panel-heading"><div><span class="section-number">03</span><h2>让修复跟上升级</h2></div><span class="tag">持续维护</span></div><p class="panel-description">程序、模型或配置变化时重新验证并重建目录。没有变化时不发送API请求；失败时保留现有配置并记录原因。</p><div class="maintenance-note">启用后使用当前用户的系统登录服务。升级时的诊断和终端验证会消耗API额度。服务端协议变化仍可能需要新的修复方案。</div><div class="panel-actions wrap"><button class="secondary" data-command="maintain">检查升级并维护</button><button class="secondary" data-command="guard-install">启用登录后维护</button><button class="text-button" data-command="guard-uninstall">停用维护</button></div></section>
+      </div>
+      <div class="side-column">
+        <section class="panel" id="connection"><div class="panel-heading"><div><h2>配置与目标</h2></div><button class="icon-button" data-command="inspect" aria-label="刷新配置">↻</button></div>
+          <label for="home">Codex配置目录</label><input id="home" placeholder="~/.codex" spellcheck="false">
+          <label for="profile">配置名称 <span>可选</span></label><input id="profile" placeholder="使用默认config.toml" spellcheck="false">
+          <label for="binary">目标Codex程序</label><input id="binary" list="binaries" placeholder="自动发现，也可填写完整路径" spellcheck="false"><datalist id="binaries"></datalist>
+          <div class="field-row"><div><label for="repeats">检测轮数</label><select id="repeats"><option>2</option><option>3</option><option>4</option><option>5</option></select></div><div><label for="timeout">请求超时/秒</label><input id="timeout" type="number" min="5" max="120" value="30"></div></div>
+          <label class="check-label"><input id="insecure" type="checkbox">允许公网HTTP明文请求</label><p class="field-help">127.0.0.1、localhost和局域网HTTP无需勾选。API地址与认证从所选配置读取。</p><button class="secondary full" data-command="inspect">读取此配置</button>
+        </section>
+        <section class="panel log-panel"><div class="panel-heading"><div><h2>操作记录</h2></div><span class="tag" id="job-status">就绪</span></div><pre id="logs" aria-live="polite">等待操作。</pre><details><summary>查看完整结果</summary><pre id="result">暂无结果。</pre></details></section>
+        <section class="recovery"><strong>需要恢复原状？</strong><p>回滚只移除本工具的配置区块，保留之后的其他修改。若上次操作中断，可先恢复事务。</p><button class="text-button" data-command="rollback">回滚补丁 ↗</button><button class="text-button" data-command="recover">恢复中断事务 ↗</button></section>
+      </div>
+    </div>
+    <section class="panel notes" id="notes"><div class="panel-heading"><div><h2>修复原理与适用范围</h2></div><span class="tag">验证后安装</span></div><p>本工具比较四种工具格式。如果平铺工具连续成功，而命名空间请求单独失败，会生成兼容配置，并使用当前Codex验证真实终端调用与结果回传。验证通过后才安装。</p><p>修复适用于支持Responses和平铺工具的第三方API。连接、认证、限流和系统权限问题会分别说明；仅支持Chat Completions的API需要先提供Responses兼容接口。完整技术说明和恢复方法见项目文档。</p></section>
+    <footer>CODEX TOOL DOCTOR <span>检查清楚，再动配置。</span></footer>
+  </main>
+</body></html>

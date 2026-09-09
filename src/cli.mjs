@@ -1,159 +1,133 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
-import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { defaultHome, loadConfig, readJson, stateDir, sanitize } from './config.mjs';
-import { discoverBinaries, loadCatalog } from './binaries.mjs';
-import { diagnose } from './probe.mjs';
-import { applyPlan, createPlan, rollback, status } from './patch.mjs';
-import { validateActive, verify } from './verify.mjs';
-import { launcher, probeNames, resultNames, yesNo, friendlyError } from './ui.mjs';
+import { defaultHome, sanitize } from './config.mjs';
+import { execute } from './engine.mjs';
+import { installGuard, uninstallGuard, runGuard } from './guard.mjs';
+import { launcher, probeNames, resultNames, friendlyError } from './ui.mjs';
 
-const HELP = `Codex 工具诊断与修复 1.0.0 - 无需本地代理或监听服务
-
+const HELP = `Codex工具诊断与修复2.2.0
+修复第三方API不兼容导致Codex无法调用工具的问题。
 用法：${launcher} <命令> [选项]
 
-  inspect    查看配置、补丁状态和已安装的 Codex 程序（离线）
-  diagnose   检测 API：四种工具格式，默认各测试两轮
-  plan       根据最近一次检测生成可审阅的补丁计划（离线）
-  apply      备份并应用补丁，验证终端，失败自动回滚
-  repair     一键执行检测、生成计划、应用补丁和验证
-  verify     通过本机 Codex 程序执行只读终端验证
-  status     查看补丁状态与完整性（离线）
-  rollback   撤销补丁，保留之后的其他配置修改
-  menu       打开中文功能菜单
+  gui          打开图形界面（Windows / macOS / Linux，本机浏览器）
+  inspect      离线查看配置、程序版本、诊断报告和补丁状态
+  diagnose     检测API工具兼容性，四种格式各2～5轮
+  plan         生成候选补丁计划，显示具体阻止原因
+  apply        两轮候选终端验证通过后，备份并安装补丁
+  repair       一键检测、计划、验证和安装；已有补丁则复检维护
+  verify       验证实际终端调用及工具结果回传
+  status       查看当前补丁状态
+  rollback     移除受管补丁，保留其他配置修改
+  recover      恢复中断事务，检查并移除已退出进程的锁
+  maintain     程序或配置改变时重新检测并更新补丁
+  launch       先维护再启动Codex；Codex参数放在--后
+  guard        持续检查升级；未改变时不发送API请求
+  guard-install    安装当前用户登录后的升级维护服务
+  guard-uninstall  停止并移除升级维护服务
+  menu         打开中文功能菜单
 
-选项：
-  --home PATH       配置目录，默认 CODEX_HOME 或 ~/.codex
-  --binary PATH     优先使用的 Codex 程序路径，同时检查可发现的安装
-  --catalog PATH    仅供 verify 临时测试候选模型目录，不修改全局配置
-  --repeats N       检测轮数，2～5，默认 2
-  --timeout N       单次 API 请求超时秒数，5～120，默认 30
-  --json            输出机器可读 JSON（字段名保持英文）
-  --help            查看帮助
+  --home PATH      配置目录，默认CODEX_HOME或~/.codex
+  --profile NAME   使用<NAME>.config.toml配置层
+  --binary PATH    只检查和修复此目标程序；默认选择发现的首个安装
+  --catalog PATH   仅用于verify的临时验证
+  --repeats N      检测轮数2～5，默认2
+  --timeout N      API请求超时5～120秒，默认30
+  --recheck        maintain主动复检，即使本机文件未变
+  --allow-insecure-http  显式允许公网明文HTTP；本地HTTP不需要此参数
+  --interval N    guard检查间隔15～3600秒，默认60
+  --once          guard只运行一次
+  --port N        GUI端口，默认自动分配
+  --no-open       GUI不自动打开浏览器
+  --json          机器可读JSON（错误也以JSON输出）
 
-检测会发送虚拟工具请求，可能消耗 API 额度，不执行返回的工具调用。
-终端验证使用临时只读会话：Windows 执行 Get-Location，Linux 执行 pwd。
-自动补丁仅适用于已验证构建；Linux 使用说明见 docs/修改原理与Linux指南.md。
-应用后请重启 Codex 桌面端或命令行，并新建会话。
+检测和终端验证会消耗API额度；修复不会执行模型返回的虚拟诊断工具。
+Windows终端验证使用pwsh的Get-Location，macOS/Linux使用pwd。
+应用后重启Codex并新建会话；升级维护不保证未知服务端变化永远兼容。
 `;
 
-function printResult(command, value) {
+function printResult(command, result) {
   if (command === 'diagnose') {
-    console.table(value.samples.map(s => ({ 检测项: probeNames[s.kind] || s.kind, 轮次: s.round, 结果: resultNames[s.result] || s.result, HTTP状态: s.status || '-' })));
-    console.log(value.summary.patchRecommended ? '已复现匹配的兼容性问题，可对已验证构建生成协议补丁计划。' : '现有证据不满足此补丁的适用条件。请查看报告；配置未修改。');
-  } else if (command === 'plan') {
-    console.log(`计划编号：${value.id}\n模型：${value.model}\n修改内容：use_responses_lite 从 true 改为 false\n模型目录：${value.catalogPath}\n下一步：${launcher} apply`);
-  } else if (command === 'apply' || command === 'repair') {
-    console.log(`补丁已应用，终端验证通过。\n原配置备份：${value.backupPath}\n请重启 Codex 并新建会话。\n回滚命令：${launcher} rollback`);
-  } else if (command === 'status') {
-    console.log(`本工具管理的补丁：${yesNo(value.patched)}\n模型：${value.model}\n服务提供方：${value.provider}\nAPI 地址：${value.endpoint}\n模型是否在补丁范围内：${yesNo(value.modelCovered)}\n模型目录完整：${yesNo(value.catalogIntact)}\n配置标记完整：${yesNo(value.managedBlockIntact)}\n模型目录路径：${value.catalogPath || '未设置'}`);
-  } else if (command === 'inspect') {
-    console.log(`配置目录：${value.home}`);
-    printResult('status', value.patch);
-    console.table(value.binaries.map(b => ({ 程序路径: b.path, 版本: b.version, 允许自动补丁: yesNo(b.supported), SHA256: b.sha256 })));
-    console.log(`内置模型的 use_responses_lite：${value.bundledModel?.use_responses_lite ?? '未提供'}`);
-  } else if (command === 'verify') {
-    console.log(`终端验证：${value.passed ? '通过' : '未通过'}`);
-    console.table(value.results.map(r => ({ 程序: r.binary, 结果: r.passed ? '通过' : '失败', 超时: yesNo(r.timedOut), 退出码: r.processExit })));
-  } else if (command === 'rollback') {
-    console.log(`补丁已撤销。\n计划编号：${value.id}\n已保留之后的其他配置修改：${yesNo(value.preservedOtherEdits)}\n请重启 Codex 并新建会话。`);
-  }
+    console.table(result.samples.map(s => ({ 检测项: probeNames[s.kind], 轮次: s.round, 结果: resultNames[s.result], HTTP: s.status || '-' })));
+    console.log(result.summary.patchRecommended ? '存在可验证的候选修复，请生成计划并验证。' : '当前不能生成此补丁：');
+    for (const reason of result.summary.blockers) console.log(`- [${reason.code}] ${reason.message}`);
+    for (const warning of result.summary.warnings) console.log(`提示：${warning}`);
+  } else if (['apply', 'repair'].includes(command) && result.backupPath) console.log(`补丁安装或维护成功。\n备份：${result.backupPath}\n请重启Codex并新建会话。可启用guard-install，在登录后自动检查升级。`);
+  else if (command === 'plan') console.log(`候选计划：${result.id}\n目标：${result.binaries[0].path}\n模型：${result.model}\n变化：use_responses_lite true → false\n下一步运行apply，候选验证通过后才写入配置。`);
+  else console.log(JSON.stringify(result, null, 2));
 }
-
+async function run(command, options, progress) {
+  if (command === 'gui') {
+    const { startGui, openBrowser } = await import('./gui.mjs');
+    const gui = await startGui(options);
+    console.log(`图形界面：${gui.url}\n关闭此进程可停止界面服务；它不会代理Codex请求。`);
+    if (!options.noOpen) await openBrowser(gui.url).catch(error => console.error(`无法自动打开浏览器，请使用上方地址。${error.message}`));
+    return;
+  }
+  if (command === 'guard-install') return installGuard(options);
+  if (command === 'guard-uninstall') return uninstallGuard(options);
+  if (command === 'guard') {
+    const controller = new AbortController();
+    const stop = () => controller.abort();
+    process.once('SIGINT', stop); process.once('SIGTERM', stop);
+    try { await runGuard(options, progress, { signal: controller.signal }); }
+    finally { process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop); }
+    return;
+  }
+  if (command === 'launch') {
+    const result = await execute('maintain', options, progress);
+    progress(result.message || result.state);
+    const info = await execute('inspect', options);
+    const args = [...(options.profile ? ['--profile', options.profile] : []), ...(options.forward || [])];
+    const code = await new Promise((resolve, reject) => {
+      const child = spawn(info.target, args, { env: { ...process.env, CODEX_HOME: options.home }, stdio: 'inherit', windowsHide: true });
+      child.on('error', reject); child.on('close', resolve);
+    });
+    process.exitCode = code ?? 1;
+    return;
+  }
+  return execute(command, options, progress);
+}
 async function menu(options) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const choices = ['inspect', 'diagnose', 'plan', 'apply', 'verify', 'status', 'rollback', 'repair'];
+  const choices = ['inspect', 'diagnose', 'plan', 'apply', 'verify', 'status', 'rollback', 'repair', 'gui', 'maintain', 'recover'];
   try {
     while (true) {
-      console.log('\nCodex 工具诊断与修复\n1. 查看本机配置与程序版本\n2. 检测 API 工具兼容性（消耗 API 额度）\n3. 生成补丁计划（不修改配置）\n4. 应用补丁并验证（自动备份，失败回滚）\n5. 验证终端执行能力\n6. 查看当前补丁状态\n7. 回滚补丁\n8. 一键检测并修复（消耗 API 额度）\n0. 退出');
+      console.log('\nCodex工具诊断与修复\n1. 查看本机配置与程序版本\n2. 检测API工具兼容性（消耗API额度）\n3. 生成补丁计划\n4. 验证候选并应用补丁\n5. 验证终端执行能力\n6. 查看补丁状态\n7. 回滚补丁\n8. 一键检测并修复\n9. 打开图形界面\n10. 检查升级并维护\n11. 恢复中断事务\n0. 退出');
       const answer = (await rl.question('请输入功能编号：')).trim();
       if (answer === '0') break;
       const command = choices[Number(answer) - 1];
-      if (!command) { console.log('请输入 0～8 之间的功能编号。'); continue; }
-      const args = [fileURLToPath(import.meta.url), command, '--home', options.home];
-      if (options.binary) args.push('--binary', options.binary);
-      args.push('--repeats', options.repeats, '--timeout', options.timeout);
-      await new Promise(resolve => {
-        const child = spawn(process.execPath, args, { stdio: 'inherit', windowsHide: true });
-        child.on('error', error => { console.error(friendlyError(error)); resolve(); });
-        child.on('close', resolve);
-      });
+      if (!command) { console.log('请输入有效编号。'); continue; }
+      try { const result = await run(command, options, console.error); if (result) printResult(command, result); if (command === 'gui') break; }
+      catch (error) { console.error(`错误：${sanitize(friendlyError(error))}`); }
     }
   } finally { rl.close(); }
 }
-
-async function applyAndVerify(home, plan, progress) {
-  const applied = await applyPlan(home, plan);
-  try {
-    const context = await loadConfig(home);
-    const binaries = await discoverBinaries(plan.binaries[0].path);
-    await validateActive(context, binaries);
-    const verification = await verify(context, binaries, { progress });
-    if (!verification.passed) throw new Error('终端验证未通过。');
-    return { ...applied, verification };
-  } catch (error) {
-    progress('验证失败，正在撤销本工具管理的补丁。');
-    try { await rollback(home); } catch (restoreError) {
-      throw new Error(`${error.message} 自动回滚也已停止：${restoreError.message}。原配置备份：${applied.backupPath}`);
-    }
-    throw new Error(`${error.message} 补丁已回滚。`);
-  }
-}
-
 async function main() {
-  const { values, positionals } = parseArgs({ options: {
-    home: { type: 'string' }, binary: { type: 'string' }, catalog: { type: 'string' }, repeats: { type: 'string', default: '2' }, timeout: { type: 'string', default: '30' }, json: { type: 'boolean' }, help: { type: 'boolean' },
+  const argv = process.argv.slice(2), separator = argv.indexOf('--');
+  const { values, positionals } = parseArgs({ args: separator < 0 ? argv : argv.slice(0, separator), options: {
+    home: { type: 'string' }, binary: { type: 'string' }, profile: { type: 'string' }, catalog: { type: 'string' },
+    repeats: { type: 'string', default: '2' }, timeout: { type: 'string', default: '30' }, interval: { type: 'string', default: '60' }, port: { type: 'string', default: '0' },
+    json: { type: 'boolean' }, help: { type: 'boolean' }, recheck: { type: 'boolean' }, once: { type: 'boolean' }, 'no-open': { type: 'boolean' }, 'allow-insecure-http': { type: 'boolean' },
   }, allowPositionals: true });
   const command = positionals[0] || 'help';
   if (values.help || command === 'help') { console.log(HELP); return; }
-  if (positionals.length > 1) throw new Error('命令后有多余参数，请用 --help 查看用法。');
-  if (values.catalog && command !== 'verify') throw new Error('--catalog 仅用于 verify 的临时验证，不会应用补丁。');
-  const home = values.home || defaultHome();
-  if (command === 'menu') { await menu({ ...values, home }); return; }
-  const repeats = Number(values.repeats), seconds = Number(values.timeout);
-  if (!Number.isInteger(repeats) || repeats < 2 || repeats > 5) throw new Error('--repeats 必须是 2～5 之间的整数。');
-  if (!Number.isFinite(seconds) || seconds < 5 || seconds > 120) throw new Error('--timeout 必须在 5～120 秒之间。');
-  const progress = message => console.error(message);
-  let result;
-  if (command === 'status') result = await status(home);
-  else if (command === 'rollback') result = await rollback(home);
-  else if (command === 'apply') {
-    const plan = await readJson(join(stateDir(home), 'last-plan.json'));
-    result = await applyAndVerify(home, plan, progress);
-  } else {
-    const context = await loadConfig(home);
-    if (command === 'diagnose') result = await diagnose(context, { repeats, timeout: seconds * 1000, progress });
-    else {
-      const binaries = await discoverBinaries(values.binary);
-      if (command === 'inspect') {
-        const catalog = await loadCatalog(binaries[0].path, home);
-        const model = catalog.models.find(m => m.slug === context.config.model);
-        result = { home, patch: await status(home), binaries, bundledModel: model ? { slug: model.slug, tool_mode: model.tool_mode, use_responses_lite: model.use_responses_lite } : null };
-      } else if (command === 'plan') {
-        result = await createPlan(context, await readJson(join(stateDir(home), 'last-report.json')), binaries);
-      } else if (command === 'verify') {
-        if (values.catalog) {
-          for (const binary of binaries) {
-            const catalog = await loadCatalog(binary.path, home, values.catalog);
-            if (catalog.models.find(m => m.slug === context.config.model)?.use_responses_lite !== false) throw new Error('候选模型目录未将当前模型的 use_responses_lite 设为 false。');
-          }
-          progress('本次仅临时测试候选模型目录，不修改全局配置，也不将未知构建加入自动补丁名单。');
-        } else if ((await status(home)).patched) await validateActive(context, binaries);
-        result = await verify(context, binaries, { progress, catalogPath: values.catalog });
-      } else if (command === 'repair') {
-        if ((await status(home)).patched) throw new Error('已有生效中的补丁。请查看状态或验证；更换补丁前先回滚。');
-        const report = await diagnose(context, { repeats, timeout: seconds * 1000, progress });
-        const plan = await createPlan(await loadConfig(home), report, binaries);
-        result = await applyAndVerify(home, plan, progress);
-      } else throw new Error(`未知命令：${command}。请用 --help 查看用法。`);
-    }
+  if (positionals.length > 1 || (separator >= 0 && command !== 'launch')) throw new Error('多余参数；Codex参数仅可放在launch的--后。');
+  if (values.catalog && command !== 'verify') throw new Error('--catalog仅用于verify的临时验证。');
+  if (!Number.isInteger(Number(values.repeats)) || Number(values.repeats) < 2 || Number(values.repeats) > 5) throw new Error('--repeats必须是2～5之间的整数。');
+  if (!Number.isFinite(Number(values.timeout)) || Number(values.timeout) < 5 || Number(values.timeout) > 120) throw new Error('--timeout必须在5～120秒之间。');
+  const options = { ...values, home: values.home || defaultHome(), allowInsecureHttp: Boolean(values['allow-insecure-http']), noOpen: values['no-open'], forward: separator < 0 ? [] : argv.slice(separator + 1) };
+  if (command === 'menu') return menu(options);
+  const result = await run(command, options, message => console.error(message));
+  if (result) {
+    if (values.json) console.log(JSON.stringify(result, null, 2)); else printResult(command, result);
+    if (command === 'verify' && !result.passed || command === 'diagnose' && result.samples.some(s => s.result !== 'pass')) process.exitCode = 2;
   }
-  if (values.json) console.log(JSON.stringify(result, null, 2)); else printResult(command, result);
-  if (command === 'verify' && !result.passed) process.exitCode = 2;
-  if (command === 'diagnose' && result.samples.some(s => s.result !== 'pass')) process.exitCode = 2;
 }
-
-main().catch(error => { console.error(`错误：${sanitize(friendlyError(error))}`); process.exitCode = 1; });
+main().catch(error => {
+  const message = sanitize(friendlyError(error));
+  if (process.argv.includes('--json')) console.log(JSON.stringify({ error: { message, code: error.code || 'DOCTOR_ERROR' } }));
+  else console.error(`错误：${message}`);
+  process.exitCode = 1;
+});
