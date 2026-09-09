@@ -21,7 +21,7 @@ const downloadUrls = version => ['https://nodejs.org/dist/', 'https://nodejs.org
 
 // Only read the real script. Every WSH filesystem, process, download and clock
 // interaction below is a synchronous in-memory substitute; no COM is invoked.
-function fixture({ transport = 'curl', download = 'ok', versions = ['v24.1.0'] } = {}) {
+function fixture({ transport = 'curl', download = 'ok', extractionFails = false, versions = ['v24.1.0'] } = {}) {
   const files = new Map(), folders = new Set();
   const pathKey = path => win32.normalize(path).toLowerCase();
   let trace, serial = 0;
@@ -131,6 +131,7 @@ function fixture({ transport = 'curl', download = 'ok', versions = ['v24.1.0'] }
     };
   }
   const shell = {
+    CurrentDirectory: root,
     Environment: () => name => env[name] || '',
     Exec(command) {
       const args = tokens(command), executable = args[0];
@@ -157,10 +158,12 @@ function fixture({ transport = 'curl', download = 'ok', versions = ['v24.1.0'] }
         files.set(pathKey(destination), result.status === 200 ? result.body : 'partial download');
         return result.status === 200 ? 0 : 22;
       }
-      if (pathKey(args[0]) === pathKey(`${system}\\tar.exe`) && args[1] === '-xf' && args[3] === '-C') {
-        const archive = args[2], stage = args[4];
+      if (pathKey(args[0]) === pathKey(`${system}\\tar.exe`) && args[1] === '-xf') {
+        if (args.length !== 3 || !/^[\x20-\x7e]+$/.test(args[2]) || win32.isAbsolute(args[2])) return unexpected('Tar must receive only an ASCII relative archive name.');
+        const stage = shell.CurrentDirectory, archive = win32.join(stage, args[2]);
         trace.events.push({ type: 'extract', archive, stage });
         if (!files.has(pathKey(archive))) return unexpected('Extracting a missing archive.');
+        if (extractionFails) return 1;
         const name = win32.basename(archive, '.zip'), version = name.slice(5, -8);
         addRuntime(`${stage}\\${name}\\node.exe`, version);
         return 0;
@@ -201,12 +204,24 @@ function fixture({ transport = 'curl', download = 'ok', versions = ['v24.1.0'] }
         Quit: code => trace.exits.push(code), Sleep: () => unexpected('Unexpected wait in synchronous fixture.'),
       } }, { timeout: 1000 });
       assert.deepEqual(trace.unexpected, []);
+      assert.equal(shell.CurrentDirectory, root, 'working directory must be restored on success and failure');
       return trace;
     },
   };
 }
 
 const eventsOf = (result, type) => result.events.filter(event => event.type === type);
+
+test('WSH extraction failure restores the working directory, cleans staging and never publishes Node', () => {
+  const f = fixture({ extractionFails: true });
+  const result = f.run();
+  assert.deepEqual(result.exits, [1]);
+  assert.deepEqual(result.stdout, []);
+  assert.match(result.stderr.join('\n'), /archive extraction failed \(tar exit 1\)/);
+  assert.equal(eventsOf(result, 'extract').length, 1);
+  assert.equal(eventsOf(result, 'move').filter(event => !event.destination.endsWith('.lock')).length, 0);
+  assert.deepEqual(f.temporaryPaths(), []);
+});
 
 for (const transport of ['curl', 'msxml']) {
   test(`WSH ${transport}: failed primary download uses official alternate, then reuses the installed cache`, () => {

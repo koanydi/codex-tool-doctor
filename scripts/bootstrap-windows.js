@@ -183,7 +183,15 @@ function main() {
                 } catch (error) { lastError = error.message; log(lastError); cleanup(archive); }
             }
             if (!verified) throw new Error(lastError);
-            if (shell.Run(commandLine(quote(system + '\\tar.exe') + ' -xf ' + quote(archive) + ' -C ' + quote(stage)), 0, true) !== 0) throw new Error('Node.js archive extraction failed.');
+            // WSH sets the working directory through Unicode Windows APIs. Use
+            // an ASCII relative archive name so tar need not decode non-ASCII
+            // -C or archive arguments in the machine's legacy code page.
+            var previousDirectory = shell.CurrentDirectory;
+            try {
+                shell.CurrentDirectory = stage;
+                var extractExit = shell.Run(commandLine(quote(system + '\\tar.exe') + ' -xf ' + quote(entry.file)), 0, true);
+                if (extractExit !== 0) throw new Error('Node.js archive extraction failed (tar exit ' + extractExit + ').');
+            } finally { shell.CurrentDirectory = previousDirectory; }
             var extracted = stage + '\\' + entry.file.replace(/\.zip$/, '');
             if (!validNode(extracted + '\\node.exe', true)) throw new Error('Downloaded Node.js/npm cannot run on this system.');
             // Never overwrite an installed runtime used by another process or the maintenance service.

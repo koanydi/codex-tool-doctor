@@ -93,7 +93,7 @@ candidates=$(awk -v platform="$platform" '
   }
   END { if (bad) exit 1; printf "%s%s", preferred, fallback }
 ' "$manifest") || { message '运行时清单格式或SHA256无效。'; exit 1; }
-[ -n "$candidates" ] || { message "清单中没有适用于$platform的Node 24/22。"; exit 1; }
+[ -n "$candidates" ] || { message "清单中没有适用于${platform}的Node 24/22。"; exit 1; }
 
 if [ -n "${TOOL_DOCTOR_RUNTIME_DIR:-}" ]; then
   cache=$TOOL_DOCTOR_RUNTIME_DIR
@@ -204,7 +204,7 @@ install_runtime() (
   verified=0
   for base in $bases; do
     for attempt in 1 2; do
-      message "下载$filename（$base，尝试$attempt/2）"
+      message "下载${filename}（${base}，尝试${attempt}/2）"
       if download "$base/$version/$filename" "$stage/archive.tar.gz" &&
         sha256_matches "$stage/archive.tar.gz" "$checksum"; then
         verified=1
@@ -227,7 +227,7 @@ install_runtime() (
   tar -xzf "$stage/archive.tar.gz" -C "$stage/extract" --no-same-owner || exit 1
   prepared=$stage/extract/$name
   runtime_usable "$prepared" "$version" || {
-    message "$filename无法运行或缺少可用npm，保留现有缓存。"; exit 1;
+    message "${filename}无法运行或缺少可用npm，保留现有缓存。"; exit 1;
   }
 
   # A healthy published runtime is immutable. Only after staging succeeds may
