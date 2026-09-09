@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { readFile, mkdir, rm, realpath, rename, readdir, rmdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { dirname, join, delimiter } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 
 export const NEED_RUNTIME = 78;
@@ -113,7 +113,10 @@ async function main() {
   await import('../src/cli.mjs');
   return process.exitCode || 0;
 }
-const entryPath = process.argv[1] ? await realpath(process.argv[1]).catch(() => process.argv[1]) : null;
-if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
+// Canonicalize both sides: Windows short names and directory junctions can
+// also appear in the module URL, while macOS commonly aliases /var.
+const entryPaths = process.argv[1]
+  ? await Promise.all([realpath(process.argv[1]), realpath(fileURLToPath(import.meta.url))]).catch(() => []) : [];
+if (entryPaths.length === 2 && entryPaths[0] === entryPaths[1]) {
   main().then(code => { process.exitCode = code; }).catch(error => { log(error.message); process.exitCode = 1; });
 }
