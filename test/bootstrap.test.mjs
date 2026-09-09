@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, rm, access, cp } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm, access, cp, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { dependenciesReady, ensureDependencies, dependencyLock, findNpm, NEED_RUNTIME } from '../scripts/launch.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -14,6 +15,18 @@ async function fixture(t) {
   t.after(() => rm(directory, { recursive: true, force: true }));
   return directory;
 }
+
+test('launcher executes through a symbolic directory path, including macOS /var aliases', async t => {
+  const directory = await fixture(t), project = join(directory, 'project'), alias = join(directory, 'linked project');
+  await mkdir(project);
+  for (const name of ['package.json', 'src', 'scripts/launch.mjs', 'node_modules/smol-toml']) {
+    await mkdir(dirname(join(project, name)), { recursive: true });
+    await cp(join(root, name), join(project, name), { recursive: true });
+  }
+  await symlink(project, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  const result = await promisify(execFile)(process.execPath, [join(alias, 'scripts/launch.mjs'), '--help'], { windowsHide: true, timeout: 15000 });
+  assert.match(result.stdout, /Codex工具诊断与修复/, result.stderr);
+});
 
 test('bootstrap verifies dependency import, not merely package.json presence', async t => {
   const directory = await fixture(t);

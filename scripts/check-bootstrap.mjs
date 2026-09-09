@@ -21,7 +21,7 @@ const launch = async () => {
     ? ['/d', '/s', '/c', '""' + join(project, 'doctor.cmd') + '" --help"']
     : [join(project, 'doctor.sh'), '--help'];
   const result = await run(file, args, { env, timeout: 2400000, windowsHide: true, windowsVerbatimArguments: process.platform === 'win32', maxBuffer: 2_000_000 });
-  assert.match(result.stdout, /Codex工具诊断与修复/);
+  assert.match(result.stdout, /Codex工具诊断与修复/, result.stderr);
   return result;
 };
 try {

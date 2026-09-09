@@ -113,6 +113,7 @@ async function main() {
   await import('../src/cli.mjs');
   return process.exitCode || 0;
 }
-if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+const entryPath = process.argv[1] ? await realpath(process.argv[1]).catch(() => process.argv[1]) : null;
+if (entryPath && pathToFileURL(entryPath).href === import.meta.url) {
   main().then(code => { process.exitCode = code; }).catch(error => { log(error.message); process.exitCode = 1; });
 }
