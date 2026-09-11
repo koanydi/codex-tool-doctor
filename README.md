@@ -79,8 +79,8 @@ Windows、macOS和Linux共用修复逻辑，自动化检查覆盖三系统。实
 
 本项目是独立社区工具，与OpenAI无隶属关系。
 
-## 本仓库来源
+## 仓库维护
 
-本仓库由[koanydi](https://github.com/koanydi)维护，基于[Onward0131/codex-tool-doctor](https://github.com/Onward0131/codex-tool-doctor)的v2.2.0版本分支，保留原有界面、功能和提交历史。下载及问题反馈入口指向本仓库，不包含特定中转站品牌、广告、推广链接或预设的商业中转地址。
+本仓库由[koanydi](https://github.com/koanydi)维护。下载及问题反馈入口指向本仓库。
 
 上游当前未提供项目许可证，本仓库未另行声明授权；第三方组件许可见[第三方组件](THIRD_PARTY_NOTICES.md)。
