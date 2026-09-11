@@ -82,5 +82,3 @@ Windows、macOS和Linux共用修复逻辑，自动化检查覆盖三系统。实
 ## 仓库维护
 
 本仓库由[koanydi](https://github.com/koanydi)维护。下载及问题反馈入口指向本仓库。
-
-上游当前未提供项目许可证，本仓库未另行声明授权；第三方组件许可见[第三方组件](THIRD_PARTY_NOTICES.md)。
