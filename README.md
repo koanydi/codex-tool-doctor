@@ -6,7 +6,7 @@
 
 Diagnose and fix Codex tool-calling failures caused by incompatible third-party APIs.
 
-[下载可运行版本](https://github.com/Onward0131/codex-tool-doctor/releases/latest) · [使用指南](docs/使用指南.md) · [问题反馈](https://github.com/Onward0131/codex-tool-doctor/issues) · [更新记录](CHANGELOG.md)
+[下载可运行版本](https://github.com/koanydi/codex-tool-doctor/releases/latest) · [使用指南](docs/使用指南.md) · [问题反馈](https://github.com/koanydi/codex-tool-doctor/issues) · [更新记录](CHANGELOG.md)
 
 ![Codex Tool Doctor图形界面](docs/images/interface.png)
 
@@ -26,7 +26,7 @@ Diagnose and fix Codex tool-calling failures caused by incompatible third-party 
 
 ## 下载与启动
 
-1. 从[Releases](https://github.com/Onward0131/codex-tool-doctor/releases/latest)下载`codex-tool-doctor-v版本号.zip`并完整解压到固定目录。
+1. 从[Releases](https://github.com/koanydi/codex-tool-doctor/releases/latest)下载`codex-tool-doctor-v版本号.zip`并完整解压到固定目录。
 2. 使用对应平台的入口：
 
 | 系统 | 图形界面 | 命令行菜单 |
@@ -78,3 +78,9 @@ Windows、macOS和Linux共用修复逻辑，自动化检查覆盖三系统。实
 反馈时请提供系统、工具版本、Codex版本及诊断结果。请勿上传API密钥、auth.json、完整配置或带认证信息的URL。
 
 本项目是独立社区工具，与OpenAI无隶属关系。
+
+## 本仓库来源
+
+本仓库由[koanydi](https://github.com/koanydi)维护，基于[Onward0131/codex-tool-doctor](https://github.com/Onward0131/codex-tool-doctor)的v2.2.0版本分支，保留原有界面、功能和提交历史。下载及问题反馈入口指向本仓库，不包含特定中转站品牌、广告、推广链接或预设的商业中转地址。
+
+上游当前未提供项目许可证，本仓库未另行声明授权；第三方组件许可见[第三方组件](THIRD_PARTY_NOTICES.md)。

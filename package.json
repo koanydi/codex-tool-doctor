@@ -6,9 +6,9 @@
   "description": "Diagnose and fix Codex tool-calling failures caused by incompatible third-party APIs.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Onward0131/codex-tool-doctor.git"
+    "url": "https://github.com/koanydi/codex-tool-doctor.git"
   },
-  "bugs": "https://github.com/Onward0131/codex-tool-doctor/issues",
+  "bugs": "https://github.com/koanydi/codex-tool-doctor/issues",
   "keywords": ["codex", "third-party-api", "tool-calling", "responses-api", "compatibility"],
   "engines": {
     "node": ">=22"
